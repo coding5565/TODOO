@@ -216,6 +216,24 @@ function withUnit(m,v){return fmtN(v)+(m.unit?' '+m.unit:'')}
 
 /* ---- ko'rsatkich hisobi: yetmagan qism ertangi rejaga qo'shiladi, ortiqchasi qolaveradi ---- */
 function targetOn(m,d){let v=m.targets[0].v;for(const t of m.targets){if(t.from<=d)v=t.v}return v}
+/* Haftalik (dushanbadan yakshanbagacha) yoki oylik reja uchun davr chegaralari */
+function periodRange(m,d){
+  if(m.kind==='week'){const dw=(pd(d).getDay()+6)%7,from=addDays(d,-dw);return{from,to:addDays(from,6)}}
+  const[y,mo]=d.split('-').map(Number);
+  return{from:dstr(new Date(y,mo-1,1)),to:dstr(new Date(y,mo,0))};
+}
+/* davrning faol ish kunlari soni (ko'rsatkich boshlangan/tugagan kunlarga qarab) */
+function periodDays(m,d){
+  const r=periodRange(m,d),from=r.from<m.start?m.start:r.from,to=(m.end&&m.end<r.to)?m.end:r.to;
+  let n=0;for(let x=from;x<=to;x=addDays(x,1))if(m.days.includes(pd(x).getDay()))n++;
+  return Math.max(1,n);
+}
+const isPeriodic=m=>m.kind==='week'||m.kind==='month';
+/* bir ish kunining me'yori: kunlik reja yoki haftalik/oylik rejaning kunlik ulushi */
+function baseOn(m,d){const v=targetOn(m,d);return isPeriodic(m)?v/periodDays(m,d):v}
+const KIND_WORD={day:'kunlik me\'yor',week:'haftalik reja',month:'oylik reja'};
+function planWord(m){return KIND_WORD[m.kind]||KIND_WORD.day}
+function planLabel(m,d){return (m.kind==='week'?'haftasiga ':m.kind==='month'?'oyiga ':'kuniga ')+withUnit(m,targetOn(m,d))}
 function calc(m,vals,upto,t0){
   const rows=[];let carry=r6(Number(m.open)||0);
   const end=m.end&&m.end<upto?m.end:upto;
@@ -223,7 +241,7 @@ function calc(m,vals,upto,t0){
   for(let d=m.start;d<=end;d=addDays(d,1)){
     const working=m.days.includes(pd(d).getDay()),has=vals[d]!==undefined;
     if(!working&&!has)continue;
-    const base=working?targetOn(m,d):0,plan=r6(base+carry);
+    const base=working?baseOn(m,d):0,plan=r6(base+carry);
     const done=has?vals[d]:0;
     const co=r6(Math.max(0,plan-done));
     rows.push({date:d,working,base,carryIn:r6(carry),plan,actual:has?vals[d]:null,done,
@@ -239,7 +257,7 @@ function nextPlan(m,vals,d,t0){
   for(let i=1;i<=14;i++){
     const n=addDays(d,i);
     if(m.end&&n>m.end)return null;
-    if(m.days.includes(pd(n).getDay()))return{date:n,base:targetOn(m,n),carry,plan:r6(targetOn(m,n)+carry)};
+    if(m.days.includes(pd(n).getDay()))return{date:n,base:baseOn(m,n),carry,plan:r6(baseOn(m,n)+carry)};
   }
   return null;
 }
@@ -369,7 +387,7 @@ function docxFiles(rep){
   rep.emps.forEach(x=>{
     b+=wPara(x.e.name,{style:'Heading1',pb:1});
     x.ms.forEach(k=>{
-      b+=wPara(k.m.name+(k.m.unit?' ('+k.m.unit+')':''),{style:'Heading2',keep:1});
+      b+=wPara(k.m.name+(k.m.unit?' ('+k.m.unit+')':'')+(isPeriodic(k.m)?'  ·  '+planWord(k.m)+': '+fmtN(targetOn(k.m,rep.to)):''),{style:'Heading2',keep:1});
       const card=(lab,val,color)=>({paras:wPara(lab,{sz:16,color:WC.mute,b:1,after:0,keep:1})+wPara(val,{sz:28,b:1,color:color||WC.ink,after:0,keep:1}),fill:WC.sum});
       const pc=pctStyle(k.pct);
       b+=wTable([2021,2021,2021,2021,2022],null,[[
@@ -608,7 +626,7 @@ function kpiParts(m,d,pv){
   const r=info.row;
   const planHtml=`<div class="lbl">Bugungi reja</div><b class="num">${withUnit(m,r.plan)}</b>
     <div class="mute small num">${r.working?`me'yor ${fmtN(r.base)}`:'dam olish kuni'}${r.carryIn?` + o'tgan qarz <span class="late">${fmtN(r.carryIn)}</span>`:''}</div>`
-    +(d<=t0?monthLine(m,d,t0):'');
+    +(d<=t0?periodProgress(m,d)+monthLine(m,d,t0):'');
   let res='';
   if(d>t0){res='<span class="tag idle">Kelgusi sana</span><div class="mute small">Fakt kiritilmaydi.</div>'}
   else{
@@ -625,6 +643,16 @@ function kpiParts(m,d,pv){
   }
   if(pv!=null&&d<=t0)res='<span class="tag wait">Hali tasdiqlanmagan</span><div class="small mute">Quyida taxminiy natija. Saqlash uchun "Tasdiqlash" ni bosing.</div>'+res;
   return{plan:planHtml,res,off:d>t0,actual:r.actual};
+}
+/* haftalik/oylik reja: shu davrda nechta bajarildi, nechta qoldi */
+function periodProgress(m,d){
+  if(!isPeriodic(m))return'';
+  const r=periodRange(m,d),vals=S.vals[m.id]||{};
+  let done=0;for(const k in vals){if(k>=r.from&&k<=d&&k<=r.to)done+=vals[k]}
+  const M=targetOn(m,d),left=r6(Math.max(0,M-done)),stop=m.end&&m.end<r.to?m.end:r.to;
+  let days=0;for(let x=addDays(d,1);x<=stop;x=addDays(x,1))if(m.days.includes(pd(x).getDay()))days++;
+  const unit=m.kind==='week'?'hafta':'oy';
+  return `<div class="small num" style="margin-top:6px">${planWord(m)[0].toUpperCase()+planWord(m).slice(1)} ${withUnit(m,M)}: bajarildi <b>${fmtN(r6(done))}</b>, qoldi <b>${fmtN(left)}</b>${days?` · ${days} ish kuni (o'rtacha ${fmtN(r6(left/days))}/kun)`:left>0?' · '+unit+' tugadi':''}</div>`;
 }
 function monthFrom(m,d){const f=d.slice(0,8)+'01';return f<m.start?m.start:f}
 function monthLine(m,d,t0){
@@ -650,7 +678,7 @@ function kpiRow(m,d){
   const p=kpiParts(m,d),saved=S.vals[m.id]&&S.vals[m.id][d]!==undefined;
   const days=daysText(m.days);
   return `<div class="kpi" data-krow="${m.id}">
-    <div class="kh"><b>${esc(m.name)}</b><span class="mute small">me'yor ${withUnit(m,targetOn(m,d))} · ${days}</span></div>
+    <div class="kh"><b>${esc(m.name)}</b><span class="mute small">${isPeriodic(m)?planWord(m):'me\'yor'} ${withUnit(m,targetOn(m,d))} · ${days}</span></div>
     <div class="kgrid">
       <div class="kplan" data-part="plan">${p.plan}</div>
       <div class="field"><label class="lbl" for="in_${m.id}">Fakt${m.unit?', '+esc(m.unit):''}</label>
@@ -714,7 +742,8 @@ function vKpi(){
       <div class="field"><label class="lbl" for="m_emp">Xodim</label><select id="m_emp">${S.emps.map(e=>`<option value="${e.id}">${esc(e.name)}</option>`).join('')}</select></div>
       <div class="field"><label class="lbl" for="m_name">Nomi</label><input id="m_name" placeholder="Pul tushumi" maxlength="60"></div>
       <div class="field"><label class="lbl" for="m_unit">Birlik</label><input id="m_unit" placeholder="mln, ta, $" maxlength="12"></div>
-      <div class="field"><label class="lbl" for="m_target">Kunlik me'yor</label><input id="m_target" inputmode="decimal" placeholder="7"></div>
+      <div class="field"><label class="lbl" for="m_kind">Reja turi</label><select id="m_kind"><option value="day">Kunlik me'yor</option><option value="week">Haftalik reja (haftasiga jami)</option><option value="month">Oylik reja (oyiga jami)</option></select></div>
+      <div class="field"><label class="lbl" id="m_tl" for="m_target">Kunlik me'yor</label><input id="m_target" inputmode="decimal" placeholder="7"></div>
       <div class="field"><label class="lbl" for="m_start">Boshlanish sanasi</label><input type="date" id="m_start" value="${t0}"></div>
       <div class="field"><label class="lbl" for="m_open">Boshlang'ich qarz (ixtiyoriy)</label><input id="m_open" inputmode="decimal" placeholder="0"></div>
       <div class="field full"><span class="lbl">Ish kunlari</span>${dayChecks([1,2,3,4,5,6],'mday')}</div>
@@ -731,7 +760,7 @@ function metricRow(m,first,t0){
   const rows=calc(m,S.vals[m.id],t0,t0).filter(r=>!r.pending);
   const debt=rows.length?rows[rows.length-1].carryOut:Number(m.open)||0;
   return `<div class="task ${first?'first':''}"><div class="body">
-    <div class="t"><b>${esc(m.name)}</b> <span class="mute">· kuniga ${withUnit(m,cur)} · ${daysText(m.days)}</span></div>
+    <div class="t"><b>${esc(m.name)}</b> <span class="mute">· ${planLabel(m,t0)} · ${daysText(m.days)}</span></div>
     <div class="meta"><span>${fmtD(m.start)} dan${m.end?' '+fmtD(m.end)+' gacha':''}</span>
       ${ended?'<span class="pill">tugagan</span>':''}
       <span class="${debt>0?'late':''} num">hozirgi qarz: ${withUnit(m,debt)}</span>
@@ -739,7 +768,7 @@ function metricRow(m,first,t0){
     ${editing?`<div class="formgrid" style="margin-top:10px">
       <div class="field"><label class="lbl" for="x_name">Nomi</label><input id="x_name" value="${esc(m.name)}" maxlength="60"></div>
       <div class="field"><label class="lbl" for="x_unit">Birlik</label><input id="x_unit" value="${esc(m.unit)}" maxlength="12"></div>
-      <div class="field"><label class="lbl" for="x_target">Yangi kunlik me'yor</label><input id="x_target" inputmode="decimal" value="${fmtIn(cur)}"></div>
+      <div class="field"><label class="lbl" for="x_target">${m.kind==='week'?'Yangi haftalik reja':m.kind==='month'?'Yangi oylik reja':'Yangi kunlik me\'yor'}</label><input id="x_target" inputmode="decimal" value="${fmtIn(cur)}"></div>
       <div class="field"><label class="lbl" for="x_from">Qaysi sanadan</label><input type="date" id="x_from" value="${t0}"></div>
       <div class="field full"><span class="lbl">Ish kunlari</span>${dayChecks(m.days,'xday')}</div>
       <div class="full row"><button class="btn pri sm" data-act="savemetric" data-id="${m.id}">Saqlash</button><button class="btn sm" data-act="cancelm">Bekor</button>
@@ -793,7 +822,7 @@ function vReport(){
   const rep=buildReport(S,ui.rf,ui.rt,t0);
   const sections=rep.emps.map(x=>{
     const ms=x.ms.map(k=>{const pc=k.pct==null?'':(k.pct>=100?'gd':k.pct>=80?'wn':'lt');
-      return `<h3>${esc(k.m.name)}${k.m.unit?', '+esc(k.m.unit):''}</h3>
+      return `<h3>${esc(k.m.name)}${k.m.unit?', '+esc(k.m.unit):''}${isPeriodic(k.m)?' · '+planWord(k.m)+' '+fmtN(targetOn(k.m,ui.rt)):''}</h3>
       <div class="mstrip"><div><span class="lbl">Me'yor</span><b class="num">${fmtN(k.sumBase)}</b></div><div><span class="lbl">Fakt</span><b class="num">${fmtN(k.sumDone)}</b></div>
         <div><span class="lbl">Bajarilish</span><b class="num ${pc}">${k.pct==null?'—':k.pct+'%'}</b></div>
         <div><span class="lbl">Rejadan farq</span><b class="num ${k.gap<0?'lt':k.gap>0?'gd':''}">${sgn(k.gap)}</b></div>
@@ -892,7 +921,8 @@ function addMetric(){
   if(tg.empty||tg.bad||tg.v<=0){toast('Kunlik me\'yorni to\'g\'ri raqam bilan yozing');$('#m_target').focus();return}
   if(op.bad){toast('Boshlang\'ich qarz noto\'g\'ri');return}
   if(!days.length){toast('Kamida bitta ish kunini belgilang');return}
-  S.metrics.push({id:uid(),emp:$('#m_emp').value,name,unit:$('#m_unit').value.trim(),targets:[{from:start,v:tg.v}],days,start,end:'',open:op.v||0});
+  const kind=['week','month'].includes($('#m_kind').value)?$('#m_kind').value:undefined;
+  S.metrics.push({id:uid(),emp:$('#m_emp').value,name,unit:$('#m_unit').value.trim(),kind,targets:[{from:start,v:tg.v}],days,start,end:'',open:op.v||0});
   ui.metricOpen=false;mark(pMeta());render();toast('Ko\'rsatkich qo\'shildi');
 }
 function saveMetric(id){
@@ -1060,6 +1090,11 @@ document.addEventListener('keydown',e=>{
   if(e.key==='Enter'&&e.target.id==='m_target')addMetric();
 });
 document.addEventListener('change',e=>{
+  if(e.target.id==='m_kind'){
+    const v=e.target.value;
+    $('#m_tl').textContent=v==='month'?'Oyiga jami':v==='week'?'Haftasiga jami':'Kunlik me\'yor';
+    $('#m_target').placeholder=v==='month'?'32':v==='week'?'8':'7';
+  }
   if(e.target.id==='d'){ui.date=e.target.value||today();render()}
 });
 
