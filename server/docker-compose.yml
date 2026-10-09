@@ -1,0 +1,16 @@
+services:
+  nazorat:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # Caddy/Nginx orqasida ishlatsangiz .env fayliga TRUST_PROXY=1 yozing
+      - TRUST_PROXY=${TRUST_PROXY:-}
+      # Ixtiyoriy: o'zingiz tanlagan birinchi sozlash kodi (bo'sh bo'lsa, tasodifiy kod logga chiqadi)
+      - SETUP_CODE=${SETUP_CODE:-}
+    volumes:
+      - nazorat-data:/data
+
+volumes:
+  nazorat-data:

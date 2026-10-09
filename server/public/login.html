@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Kirish — Xodimlar nazorati</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --bg:#f3f5f8;--surface:#ffffff;--ink:#17202e;--mute:#667186;--line:#dfe4ec;
+  --accent:#1d5fa8;--accent-ink:#ffffff;--bad:#b91c1c;--bad-soft:#fbe7e7;
+  --font:'Onest',system-ui,-apple-system,'Segoe UI',sans-serif;color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0e131b;--surface:#161d28;--ink:#e7ebf2;--mute:#8e99ae;--line:#263042;
+  --accent:#6aa6ec;--accent-ink:#0b1320;--bad:#f87171;--bad-soft:#381a1a;color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 var(--font);display:grid;place-items:center;padding:16px}
+.box{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:28px 24px}
+h1{margin:0 0 4px;font-size:20px;letter-spacing:-.01em}
+p{margin:0 0 18px;color:var(--mute);font-size:14px}
+form{display:flex;flex-direction:column;gap:12px}
+label{display:flex;flex-direction:column;gap:4px;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--mute);font-weight:600}
+input{font:inherit;font-size:15px;letter-spacing:normal;text-transform:none;font-weight:400;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;min-width:0}
+input:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button{font:inherit;font-weight:600;cursor:pointer;background:var(--accent);color:var(--accent-ink);border:0;border-radius:8px;padding:11px 14px;margin-top:4px}
+button:disabled{opacity:.6;cursor:default}
+.err{background:var(--bad-soft);color:var(--bad);border-radius:8px;padding:9px 12px;font-size:14px}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main class="box">
+  <h1 id="h">Xodimlar nazorati</h1>
+  <p id="sub">Yuklanmoqda…</p>
+  <form id="f" hidden autocomplete="on">
+    <label id="codeRow" hidden>Sozlash kodi<input id="code" autocomplete="off" spellcheck="false"></label>
+    <label>Login<input id="u" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
+    <label>Parol<input id="p" name="password" type="password" autocomplete="current-password" required></label>
+    <label id="p2Row" hidden>Parolni takrorlang<input id="p2" type="password" autocomplete="new-password"></label>
+    <div id="err" class="err" role="alert" hidden></div>
+    <button id="btn" type="submit">Kirish</button>
+  </form>
+</main>
+<script>
+const $=s=>document.querySelector(s);
+let setup=false;
+function showErr(m){const e=$('#err');e.textContent=m;e.hidden=!m}
+async function post(url,body){
+  const r=await fetch(url,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-Requested-With':'nazorat'},body:JSON.stringify(body)});
+  let j={};try{j=await r.json()}catch(e){}
+  if(!r.ok)throw new Error(j.error||'Xatolik ('+r.status+')');
+  return j;
+}
+(async()=>{
+  try{
+    const s=await (await fetch('/api/status',{credentials:'same-origin'})).json();
+    if(s.loggedIn){location.replace('/');return}
+    setup=!s.hasUsers;
+    if(setup){
+      $('#h').textContent='Birinchi akkauntni oching';
+      $('#sub').textContent='Server logida chiqqan sozlash kodini kiriting va o\'zingizga login hamda parol tanlang.';
+      $('#codeRow').hidden=false;$('#p2Row').hidden=false;$('#p').autocomplete='new-password';$('#btn').textContent='Akkaunt ochish';
+    }else $('#sub').textContent='Davom etish uchun login va parolingizni kiriting.';
+    $('#f').hidden=false;(setup?$('#code'):$('#u')).focus();
+  }catch(e){$('#sub').textContent='Serverga ulanib bo\'lmadi. Sahifani yangilang.'}
+})();
+$('#f').addEventListener('submit',async ev=>{
+  ev.preventDefault();showErr('');
+  const username=$('#u').value.trim(),password=$('#p').value;
+  if(setup&&password!==$('#p2').value){showErr('Ikkala parol bir xil emas');return}
+  if(setup&&password.length<8){showErr('Parol kamida 8 belgi bo\'lsin');return}
+  $('#btn').disabled=true;
+  try{
+    await post(setup?'/api/setup':'/api/login',setup?{code:$('#code').value.trim(),username,password}:{username,password});
+    location.replace('/');
+  }catch(e){showErr(e.message);$('#btn').disabled=false}
+});
+</script>
+</body>
+</html>
