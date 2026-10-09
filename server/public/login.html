@@ -7,15 +7,19 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap">
+<script>try{var _t=localStorage.getItem('nz_theme');if(_t==='dark'||_t==='light')document.documentElement.setAttribute('data-theme',_t)}catch(e){}</script>
 <style>
 :root{
   --bg:#f3f5f8;--surface:#ffffff;--ink:#17202e;--mute:#667186;--line:#dfe4ec;
   --accent:#1d5fa8;--accent-ink:#ffffff;--bad:#b91c1c;--bad-soft:#fbe7e7;
   --font:'Onest',system-ui,-apple-system,'Segoe UI',sans-serif;color-scheme:light;
 }
-@media (prefers-color-scheme:dark){:root{
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#0e131b;--surface:#161d28;--ink:#e7ebf2;--mute:#8e99ae;--line:#263042;
   --accent:#6aa6ec;--accent-ink:#0b1320;--bad:#f87171;--bad-soft:#381a1a;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e131b;--surface:#161d28;--ink:#e7ebf2;--mute:#8e99ae;--line:#263042;
+  --accent:#6aa6ec;--accent-ink:#0b1320;--bad:#f87171;--bad-soft:#381a1a;color-scheme:dark}
 *{box-sizing:border-box}
 html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 var(--font);display:grid;place-items:center;padding:16px}
