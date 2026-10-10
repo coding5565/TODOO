@@ -7,8 +7,12 @@ services:
     environment:
       # Caddy/Nginx orqasida ishlatsangiz .env fayliga TRUST_PROXY=1 yozing
       - TRUST_PROXY=${TRUST_PROXY:-}
-      # Ixtiyoriy: o'zingiz tanlagan birinchi sozlash kodi (bo'sh bo'lsa, tasodifiy kod logga chiqadi)
-      - SETUP_CODE=${SETUP_CODE:-}
+      # Super admin ro'yxatdan o'tish uchun maxfiy kod (bo'sh bo'lsa, server o'zi yaratadi va logga yozadi)
+      - ADMIN_CODE=${ADMIN_CODE:-}
+      # Eng ko'pi bilan nechta super admin bo'lishi mumkin
+      - MAX_ADMINS=${MAX_ADMINS:-3}
+      # Server vaqt mintaqasi (kunlar shu vaqt bo'yicha almashadi)
+      - TZ=${TZ:-Asia/Tashkent}
     volumes:
       - nazorat-data:/data
 

@@ -3,5 +3,3 @@ data/
 .env
 *.zip
 *.log
-# eski birinchi variant, endi kerak emas
-index.html

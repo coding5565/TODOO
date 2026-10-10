@@ -1,11 +1,12 @@
 FROM node:24-slim
+RUN apt-get update && apt-get install -y --no-install-recommends tzdata && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY server.js reset-password.js ./
 COPY public ./public
 RUN mkdir -p /data && chown -R node:node /data
-ENV NODE_ENV=production DATA_DIR=/data PORT=3000
+ENV NODE_ENV=production DATA_DIR=/data PORT=3000 TZ=Asia/Tashkent
 VOLUME /data
 USER node
 EXPOSE 3000
