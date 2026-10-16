@@ -13,7 +13,7 @@ const isAdmin=()=>ME.role==='admin';
 let ui={tab:'today',sub:'day',date:today(),stamp:today(),panel:'',menu:false,showBehind:false,
   fEmp:'',fPer:'',fStat:'',addEmp:'',addPer:'day',addRep:false,addDue:'',addOpen:false,metricOpen:false,
   edit:null,del:null,delEmp:null,delRule:null,delMetric:null,editM:null,acct:null,delAcc:null,
-  impConfirm:false,impText:'',logRows:null,
+  impConfirm:false,impText:'',logRows:null,extra:{},
   rf:today().slice(0,8)+'01',rt:today()};
 
 const $=s=>document.querySelector(s);
@@ -260,7 +260,7 @@ function kpiParts(m,d,pv){
     if(pv!=null)res=res.replace('class="kres ','class="kres prev ').replace('<span>','<span>Taxminan: ');
     res+=progressLine(m,vals,key,t0);
   }
-  return{plan,res,off:future,actual:r.actual};
+  return{plan,res,off:future,actual:r.actual,rest:!r.working&&!per};
 }
 /* kiritiladigan darajadan farqli bo'limlarda: avtomatik hisoblangan ko'rinish (faqat o'qish uchun) */
 function levelCard(m,level,d){
@@ -283,6 +283,11 @@ function levelCard(m,level,d){
 function kpiRow(m,d,old){
   const per=isPeriodic(m),key=kpiKey(m,d),id=m.id+'_'+key;
   const p=kpiParts(m,key),cur=getVal(m,S.vals[m.id],key),saved=cur!==undefined;
+  if(p.rest&&!saved&&!ui.extra[id]){   // ish kuni emas: reja yoki limit qo'shilmaydi
+    return `<div class="kitem rest" data-krow="${id}"><div class="khead"><span class="kname">${esc(m.name)}</span><span class="kpill">dam olish kuni</span></div>
+      <div class="kdetail" style="margin-top:6px">${DOW_FULL[pd(key).getDay()]} ish kuni emas: ${isLimit(m)?'limit':'reja'} hisoblanmaydi.
+      <button class="btn ghost sm" data-act="extra" data-id="${id}">Baribir kiritish</button></div></div>`;
+  }
   return `<div class="kitem" data-krow="${id}">
     <div class="khead"><span class="kname">${esc(m.name)}</span>${per?`<span class="kpill ${old?'old':''}">${old?'o\'tgan davr · ':''}${esc(periodLabel(m,key))}</span>`:''}</div>
     <div class="kbody">
@@ -326,6 +331,7 @@ function subCount(kind,d){
   let n=0;
   S.emps.forEach(e=>activeMetrics(e.id,d,kind).forEach(m=>{
     const per=isPeriodic(m);
+    if(!per&&!m.days.includes(pd(d).getDay())&&getVal(m,S.vals[m.id],d)===undefined)return;
     subKeys(m,d).forEach((k,i)=>{
       if(getVal(m,S.vals[m.id],k)!==undefined)return;
       if(per&&i===0&&d<addDays(periodRange(m,d).to,-1))return;   // joriy hafta/oy faqat oxirgi 2 kunda hisoblanadi
@@ -351,6 +357,26 @@ function behindBox(d,kind){
   return `<button class="behind" data-act="behind"><span>${items.length} ta ko'rsatkich e'tibor talab qiladi</span><span>${ui.showBehind?'Yopish':'Ko\'rish'}</span></button>`
     +(ui.showBehind?`<div class="behindlist">${items.map(x=>`<div class="br"><span><b>${esc(x.e.name)}</b> · ${esc(x.m.name)}</span><span class="warn num"><b>${x.st.limit?'+':'−'}${withUnit(x.m,-x.st.gap)}</b> <span class="mute small">${x.st.limit?'limitdan oshgan':'ortda'}</span></span></div>`).join('')}</div>`:'');
 }
+/* oxirgi kunlar ichida kiritilmagan kunlar: [{d, n}] (n = kiritilmagan ko'rsatkichlar soni) */
+function missedDates(maxBack){
+  const t0=today(),out=[];
+  for(let i=1;i<=(maxBack||14);i++){
+    const d=addDays(t0,-i);let n=0;
+    S.emps.forEach(e=>activeMetrics(e.id,d,'day').forEach(m=>{
+      if(!m.days.includes(pd(d).getDay()))return;                       // ish kuni emas
+      if(S.vals[m.id]&&S.vals[m.id][d]!==undefined)return;
+      n++;
+    }));
+    if(n)out.push({d,n});
+  }
+  return out;
+}
+function missedBox(d){
+  const list=missedDates(14);
+  if(!list.length)return'';
+  return `<div class="missed"><div class="lbl">Kiritilmagan kunlar. Bosing va kiriting:</div><div class="chips">${list.map(x=>{const dt=pd(x.d);
+    return `<button class="chip ${x.d===d?'on':''}" data-act="goto" data-v="${x.d}">${DOW[dt.getDay()]}, ${dt.getDate()}-${MON[dt.getMonth()]} · ${x.n} ta</button>`}).join('')}</div></div>`;
+}
 const SUB_HINT={week:'Hafta oxirida bir marta, haftalik jami sonni kiriting. Kunlik kiritiladiganlarning haftalik natijasi pastda o\'zi chiqadi.',month:'Oy oxirida bir marta, oylik jami sonni kiriting. Kunlik kiritiladiganlarning oylik natijasi pastda o\'zi chiqadi.'};
 
 function vToday(){
@@ -363,7 +389,9 @@ function vToday(){
     ${isToday?'':'<div class="row" style="justify-content:center;margin-top:-4px"><button class="btn sm ghost" data-act="gotoday">Bugunga qaytish</button></div>'}
     <div class="seg" role="tablist" aria-label="Bo'lim">${SUBS.map(([k,n])=>{const c=subCount(k,d);
       return `<button class="segb ${sub===k?'on':''}" role="tab" aria-selected="${sub===k}" data-act="sub" data-v="${k}">${n}${c?`<span class="badge">${c}</span>`:''}</button>`}).join('')}</div>
-    ${SUB_HINT[sub]?`<p class="hint">${SUB_HINT[sub]}</p>`:''}`;
+    ${SUB_HINT[sub]?`<p class="hint">${SUB_HINT[sub]}</p>`:''}
+    ${sub==='day'?missedBox(d):''}
+    ${d<t0&&sub!=='tasks'?'<p class="hint">O\'tgan kun: natijani kiritishingiz yoki o\'zgartirishingiz mumkin.</p>':''}`;
   const cards=S.emps.map(e=>{
     if(sub==='tasks'){
       const ts=taskList.filter(t=>t.emp===e.id).sort((a,b)=>a.done-b.done||(a.due||'').localeCompare(b.due||''));
@@ -504,6 +532,11 @@ function metricRow(m,first,t0){
       ${debt>0?`<span class="late num">qarz: ${withUnit(m,debt)}</span>`:''}
       ${m.targets.length>1?`<span>me'yor tarixi: ${m.targets.map(x=>fmtN(x.v)+' ('+fmtD(x.from)+')').join(' → ')}</span>`:''}</div>
     ${editing?`<div class="formgrid" style="margin-top:12px">
+      <div class="field full"><span class="lbl">Turi</span>
+        <div class="kindpick two" role="radiogroup">
+          <label><input type="radio" name="x_mode" value="target" ${isLimit(m)?'':'checked'}>Reja<small>kamida shuncha kerak</small></label>
+          <label><input type="radio" name="x_mode" value="limit" ${isLimit(m)?'checked':''}>Limit<small>shundan oshmasin</small></label></div>
+        <span class="hint" style="margin:0">Turini almashtirsangiz, kiritilgan natijalar saqlanadi, hisob esa yangi tur bo'yicha qayta chiqadi.</span></div>
       <div class="field"><label class="lbl" for="x_name">Nomi</label><input id="x_name" value="${esc(m.name)}" maxlength="60"></div>
       <div class="field"><label class="lbl" for="x_unit">Birlik</label><input id="x_unit" value="${esc(m.unit)}" maxlength="12"></div>
       <div class="field"><label class="lbl" for="x_target">Yangi miqdor (${basisOf(m)==='week'?'haftasiga':basisOf(m)==='month'?'oyiga':'kuniga'})</label><input id="x_target" inputmode="decimal" value="${fmtIn(cur)}"></div>
@@ -535,6 +568,8 @@ function saveMetric(id){
   const name=$('#x_name').value.trim(),tg=parseNum($('#x_target').value),days=readDays('xday'),from=$('#x_from').value||today();
   if(!name||tg.empty||tg.bad||tg.v<=0||!days.length){toast('Nom, miqdor va ish kunlarini tekshiring');return}
   m.name=name;m.unit=$('#x_unit').value.trim();m.days=days;
+  const xm=(document.querySelector('input[name=x_mode]:checked')||{}).value;
+  if(xm)m.mode=xm==='limit'?'limit':undefined;
   const cur=targetOn(m,from),ex=m.targets.find(x=>x.from===from);
   if(ex)ex.v=tg.v;else if(tg.v!==cur)m.targets.push({from,v:tg.v});
   m.targets.sort((a,b)=>a.from.localeCompare(b.from));
@@ -820,6 +855,8 @@ document.addEventListener('click',async e=>{
       render();window.scrollTo(0,0);break;
     case'pickdate':{const p=$('#dpick');if(p){try{p.showPicker()}catch(x){p.focus();p.click()}}break}
     case'gotoday':ui.date=today();render();break;
+    case'goto':ui.date=v;ui.sub='day';render();window.scrollTo(0,0);break;
+    case'extra':ui.extra[id]=true;render();{const n=document.getElementById('in_'+id);if(n)n.focus()}break;
     case'dayshift':ui.date=addDays(ui.date,Number(v));render();break;
     case'addopen':ui.addOpen=!ui.addOpen;render();if(ui.addOpen){const t=$('#a_title');if(t)t.focus()}break;
     case'add':addTask();break;

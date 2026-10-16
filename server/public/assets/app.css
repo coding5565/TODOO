@@ -203,6 +203,16 @@ textarea.big{min-height:130px;font:13px/1.4 ui-monospace,Consolas,monospace;resi
 .kprog{margin-top:8px;font-size:14px;color:var(--mute);padding-top:8px;border-top:1px dashed var(--line)}
 .kprog b{color:var(--ink);font-weight:600}
 
+
+/* ---- kiritilmagan kunlar va dam olish kuni ---- */
+.missed{background:var(--warn-soft);border-radius:14px;padding:12px 14px}
+.missed .lbl{color:var(--warn);font-weight:600}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.chip{border:1px solid var(--warn);background:var(--surface);color:var(--warn);border-radius:99px;height:36px;padding:0 14px;font-weight:600;font-size:14px}
+.chip:hover{filter:brightness(.97)}
+.chip.on{background:var(--warn);color:var(--surface)}
+.kitem.rest{opacity:.85}
+
 /* ---- telefon ---- */
 @media (max-width:760px){
   .top-in{height:54px;padding:0 12px}
